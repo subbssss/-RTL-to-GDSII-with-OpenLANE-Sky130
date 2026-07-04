@@ -116,11 +116,13 @@ prep -design picorv32a
 
 `prep` merges the standard cell LEF with the fill/decap/diode macro LEFs, points OpenLANE at the Sky130A PDK, and creates a fresh timestamped run folder.
 
+<img width="975" height="719" alt="image" src="https://github.com/user-attachments/assets/ea88a53a-276a-4ca3-a951-3c2da59849e5" />
+
 **[fig 01]** — terminal right after `flow.tcl -interactive`, OpenLANE ASCII banner still loading, LEF-merge log scrolling (SITE/MACRO match counts for the standard cell, fill, decap, and diode LEFs).
-*→ place directly under "Launching OpenLANE"*
+
+<img width="975" height="710" alt="image" src="https://github.com/user-attachments/assets/755a9349-2a77-4789-b110-1df19fd2afd0" />
 
 **[fig 02]** — same terminal moments later: `mergeLef.py: Merging LEFs complete`, `Preparation complete`, prompt now sitting at `% run_synthesis`.
-*→ place right after the code block above*
 
 ### Running synthesis
 
@@ -128,8 +130,9 @@ prep -design picorv32a
 run_synthesis
 ```
 
+<img width="975" height="708" alt="image" src="https://github.com/user-attachments/assets/31908d86-072c-4529-8ef1-8636b029b799" />
+
 **[fig 03]** — OpenSTA's post-synthesis summary: `tns -759.46`, `wns -24.89`, `[INFO]: Synthesis was successful`.
-*→ place after `run_synthesis`*
 
 ### Reading the reports
 
@@ -146,26 +149,30 @@ ls
 cat 1-yosys_4.stat.rpt
 ```
 
-**[fig 04]** — navigating `runs → designs/picorv32a → runs`, listing all the sample designs OpenLANE ships with.
-*→ place after the navigation block, before showing report contents*
+<img width="975" height="631" alt="image" src="https://github.com/user-attachments/assets/6d21b9b8-2f79-4de4-babd-36b8df253ca1" />
 
-**[fig 05]** — `ls -ltr` inside the run folder (`results/`, `reports/`, `logs/`, `tmp/`, `config.tcl`), then `cat 1-yosys_4.stat.rpt` starting to print: `Number of wires: 14596`, `Number of cells: 14876`, and the cell breakdown beginning.
-*→ place right after*
+**[fig 04]** — navigating `runs → designs/picorv32a → runs`, listing all the sample designs OpenLANE ships with.
+
+<img width="975" height="702" alt="image" src="https://github.com/user-attachments/assets/e0c49526-14a8-4dda-b08f-d6561201d8fb" />
+
+**[fig 05]** — `ls -ltr` inside the run folder (`results/`, `reports/`, `logs/`, `tmp/`, `config.tcl`), then `cat 1-yosys_4.stat.rpt` starting to print: `Number of wires: 14596`, `Number of cells: 14596`, and the cell breakdown beginning.
+
+<img width="975" height="708" alt="image" src="https://github.com/user-attachments/assets/37f6965f-7f51-4d9f-840b-0d87ddaebf08" />
 
 **[fig 06]** — stat report continuing (mux/nand/nor/o21a family counts scrolling by).
-*→ place directly under fig 05*
+
+<img width="975" height="708" alt="image" src="https://github.com/user-attachments/assets/23aa3331-cb17-4d80-96b4-96b5f3d9ad9c" />
 
 **[fig 07]** — end of the stat report, finishing at `or4bb_2`, and the line: `Chip area for module 'picorv32a': 147712.918400`.
-*→ place last in this section*
 
 ### Synthesis summary table
 
 | Metric | Value |
 |---|---|
-| Total cell count | 14,876 |
+| Total cell count | 14,596 |
 | D flip-flops (`sky130_fd_sc_hd__dfxtp_2`) | 1,613 |
-| **Flop ratio** = DFFs ÷ total cells | 1613 / 14876 = **0.1084** |
-| **% DFFs** | **10.84%** |
+| **Flop ratio** = DFFs ÷ total cells | 1613 / 14876 = **0.1105** |
+| **% DFFs** | **11.05%** |
 | Synthesized cell area (Yosys) | 147,712.92 µm² |
 | Clock period used | 5.0 ns (see Day 2 — this gets fixed) |
 | WNS / TNS at this clock | −24.89 ns / −759.46 ns |
@@ -178,18 +185,22 @@ That heavily negative WNS is expected — a 5 ns clock is unrealistic for this d
 
 ### Fixing the clock period
 
-**[fig 08]** — `config.tcl` open, `CLOCK_PERIOD "5.000"` visible.
-*→ place at the top of this section*
+<img width="975" height="706" alt="image" src="https://github.com/user-attachments/assets/c43abd70-305d-463e-a86b-f7dbb2c0ce45" />
 
-**[fig 09]** — `sky130A_sky130_fd_sc_hd_config.tcl` open, showing `CLOCK_PERIOD "24.73"` — this is a value OpenLANE derives internally, and it silently overrides the top-level config unless you patch this file too.
-*→ place right after fig 08 — this is the file that trips most people up*
+**[fig 08]** — `config.tcl` open, `CLOCK_PERIOD "5.000"` visible. Change to "55.00"
+
+<img width="975" height="710" alt="image" src="https://github.com/user-attachments/assets/49d84417-fe7e-477f-9653-d6af0f352e48" />
+
+**[fig 09]** — `sky130A_sky130_fd_sc_hd_config.tcl` open, showing `CLOCK_PERIOD "24.73"` — this is a value OpenLANE derives internally, and it silently overrides the top-level config unless you patch this file too. Change to "55.00"
 
 ```tcl
 run_synthesis
 ```
 
+<img width="975" height="650" alt="image" src="https://github.com/user-attachments/assets/b0016942-f350-4821-b138-299ce2604e58" />
+
 **[fig 10]** — OpenSTA re-run against the corrected 11.0 ns delay budget (period × IO_PCT), this time closing at `tns 0.00` / `wns 0.00` — clean timing.
-*→ place after*
+
 
 ### Floorplan
 
@@ -197,16 +208,20 @@ run_synthesis
 run_floorplan
 ```
 
+<img width="975" height="710" alt="image" src="https://github.com/user-attachments/assets/7084d6a8-0ec6-40f4-9a65-9b86d5c5e1ac" />
+
 **[fig 11]** — floorplan log: PDN vsrc-placement warnings (`is not located on a power stripe, moving to closest stripe...`), finishing with `PDN generation was successful`.
-*→ place after `run_floorplan`*
+
+<img width="975" height="708" alt="image" src="https://github.com/user-attachments/assets/b1425f00-46b3-458b-a9e3-39df0e221855" />
 
 **[fig 12]** — navigating into `results/floorplan` and listing (`merged_unpadded.lef`, `picorv32a.floorplan.def`, `picorv32a.floorplan.def.png`).
-*→ place before the DEF contents*
+
+<img width="975" height="708" alt="image" src="https://github.com/user-attachments/assets/0576f52b-5f77-45fb-9867-da3563009e30" />
 
 **[fig 13]** — `picorv32a.floorplan.def` opened, `DIEAREA ( 0 0 ) ( 666685 671405 )` and the `ROW` definitions visible.
-*→ place right after fig 12*
 
-### Die area — from my own DEF
+
+### Die area — from DEF
 
 | Quantity | Value |
 |---|---|
@@ -221,11 +236,14 @@ run_floorplan
 magic -T .../sky130A.tech lef read ../../tmp/merged.lef def read picorv32a.floorplan.def &
 ```
 
+<img width="975" height="656" alt="image" src="https://github.com/user-attachments/assets/37b20c08-bcff-4b18-9bdb-cb54059bc97a" />
+
 **[fig 14]** — Magic `layout1` with just the die outline + rows loaded, tkcon logging label placements alongside.
-*→ place after the magic command*
+
+<img width="975" height="654" alt="image" src="https://github.com/user-attachments/assets/70fc0622-15c6-4aa3-979f-b5cd81a6cbe7" />
 
 **[fig 15]** — zoomed-in view: decap cells and tap cells (`sky130_fd_sc_hd__tapvpwrvgnd_1`) placed at equal spacing along the rows.
-*→ place right after fig 14*
+
 
 ### Placement
 
@@ -233,11 +251,14 @@ magic -T .../sky130A.tech lef read ../../tmp/merged.lef def read picorv32a.floor
 run_placement
 ```
 
+<img width="975" height="650" alt="image" src="https://github.com/user-attachments/assets/c45e5851-942d-436a-8cfa-57b79eb1f2ce" />
+
 **[fig 16]** — placement run — same PDN stripe warnings replaying (normal, not a new failure), ending at `% run_placement`.
-*→ place after*
+
+<img width="975" height="658" alt="image" src="https://github.com/user-attachments/assets/9506cbc8-293f-4151-af2e-f9d7fbb05b8e" />
 
 **[fig 17]** — the full placement stats block.
-*→ place directly after fig 16*
+
 
 ### Placement summary table (from fig 17)
 
@@ -261,12 +282,16 @@ run_placement
 ```tcl
 magic -T .../sky130A.tech lef read merged_unpadded.lef def read picorv32a.placement.def &
 ```
+<img width="975" height="658" alt="image" src="https://github.com/user-attachments/assets/cb7752ff-a059-4368-99b9-03d633b6d099" />
 
 **[fig 18]** — placement DEF loading, tkcon confirming `Processed 21700 subcell instances`, `17241 nets`, `DEF read: Processed 41860 lines`.
-*→ place after the magic command*
+
+<img width="975" height="660" alt="image" src="https://github.com/user-attachments/assets/600d8295-1d52-4bac-852c-dbbbe9e50744" />
+
+<img width="975" height="660" alt="image" src="https://github.com/user-attachments/assets/c8828f4d-1744-4b19-a55a-b4fbfe56da62" />
 
 **[fig 19]** — two views: full-chip zoomed out (dense, every cell placed) and zoomed in with individual instances labeled (`o2a_1`, `a2bb2o_1`, `ckbuf_4`, `and4_2`), legally abutting.
-*→ place last, closes out Day 2*
+
 
 ---
 
@@ -283,8 +308,10 @@ cp <pdk_path>/libs.tech/magic/sky130A.tech .
 magic -T sky130A.tech sky130_inv.mag &
 ```
 
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/7ed26570-0eed-46d0-a458-ceede4955024" />
+
 **[fig 20]** — terminal running clone + copy (a couple of path typos first before it goes through), next to the Magic layout showing NMOS/PMOS regions and the `A` (input), `Y` (output), `VPWR`, `VGND` labels.
-*→ place after the clone block*
+
 
 ### Extracting to SPICE
 
@@ -296,21 +323,33 @@ ext2spice cthresh 0 rthresh 0
 ext2spice
 ```
 
+<img width="975" height="485" alt="image" src="https://github.com/user-attachments/assets/5ae99738-ad99-4352-88f0-2ac79322da6a" />
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/7e5defdb-ab91-4909-a269-e7c53c2c23a3" />
+
 **[fig 21]** — tkcon logging the extraction (`extspice finished`) beside the layout view, plus the zoomed-out "topmost cell in window" shot from over-zooming after extraction.
-*→ place after the extract commands*
+
 
 ### The SPICE netlist and simulation
 
+<img width="975" height="671" alt="image" src="https://github.com/user-attachments/assets/7ea1cbb2-5002-4677-b0ad-43b67757ac77" />
+
+<img width="975" height="552" alt="image" src="https://github.com/user-attachments/assets/b2bc11cf-454b-4a51-ac34-44ab13fdb800" />
+
 **[fig 22]** — the generated `sky130_inv.spice` netlist: two MOSFETs (`M1000`/`M1001`, `pshort_model`/`nshort_model`), `VDD`/`VSS` supplies, a `PULSE` stimulus on node `a`, load/parasitic capacitors, `.tran 1n 20n`, and the `.control / run / plot v(a) v(y) / .endc` block. Below it, ngspice's initial DC solution and `No. of Data Rows: 160`.
-*→ place under this heading*
+
 
 ```bash
 ngspice sky130_inv.spice
 plot y vs time a
 ```
 
+<img width="975" height="548" alt="image" src="https://github.com/user-attachments/assets/71e64c1f-2063-4561-b9af-441e130e3fa8" />
+
+<img width="975" height="517" alt="image" src="https://github.com/user-attachments/assets/3d0663cb-03f5-47bd-897e-d70dca4fb646" />
+
 **[fig 23]** — transient data table (`time`, `v(a)`, `v(y)`) and the waveform plot: red trace = input pulse on `a`, blue trace = inverted output on `y`, switching every cycle.
-*→ place after the plot command — this is the proof the cell inverts correctly*
+
 
 ### How to pull the standard timing numbers off this waveform
 
@@ -321,11 +360,10 @@ plot y vs time a
 | Rise cell delay | time(output 50%) − time(input falling 50%) |
 | Fall cell delay | time(output 50%) − time(input rising 50%) |
 
-I'll fill in the actual measured numbers once I've re-run this with cursors on the ngspice plot rather than eyeballing the data table — didn't want to guess values here.
 
 ---
 
-## Day 4 (in progress) — Wiring the Custom Cell into the Flow
+## Day 4 — Wiring the Custom Cell into the Flow
 
 ### Checking track alignment
 
@@ -335,8 +373,10 @@ Before OpenLANE will accept a custom cell into placement, its ports need to land
 grid 0.46um 0.34um 0.23um 0.17um
 ```
 
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/e63526c9-dfc0-4db4-82c8-f23d4b430ddf" />
+
 **[fig 24]** — tkcon `help grid` output, grid applied, Magic view of the inverter with the track grid now overlaid confirming port alignment.
-*→ place after the grid command*
+
 
 | Condition | Requirement | This cell's values | Status |
 |---|---|---|---|
@@ -356,11 +396,13 @@ ls
 cat sky130_inv.lef
 ```
 
+<img width="975" height="504" alt="image" src="https://github.com/user-attachments/assets/3064a968-bdb6-4ef1-8cf4-5981ac436647" />
+
 **[fig 25]** — directory listing (`.spice`, `.tech`, `.ext`, `.lef`, `.mag` all present), `cat sky130_inv.lef` starting: `MACRO sky130_inv`, `PIN A` / `PIN Y` with `RECT` geometry on `li1`.
-*→ place after `lef write`*
+
+<img width="975" height="504" alt="image" src="https://github.com/user-attachments/assets/5f360d32-f4a0-4c81-a6e5-9e65046c5d40" />
 
 **[fig 26]** — rest of the LEF: `PIN VPWR` / `PIN VGND` across `nwell`, `li1`, `mcon`, `met1`, closing `END sky130_inv` / `END LIBRARY`.
-*→ place directly after fig 25*
 
 ### Wiring it into `picorv32a`
 
@@ -377,8 +419,10 @@ set ::env(LIB_TYPICAL) ".../src/sky130_fd_sc_hd__typical.lib"
 set ::env(EXTRA_LEFS)  [glob $::env(OPENLANE_ROOT)/designs/$::env(DESIGN_NAME)/src/*.lef]
 ```
 
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/dff50877-a7ac-4b5a-aa09-bf0960a040bb" />
+
 **[fig 27]** — terminal copying the LEF/lib files, config.tcl open with the `LIB_*` and `EXTRA_LEFS` lines added.
-*→ place after the copy/config block*
+
 
 ### Re-running synthesis with the custom cell in the library
 
@@ -391,8 +435,12 @@ set ::env(SYNTH_SIZING) 1
 run_synthesis
 ```
 
+<img width="975" height="506" alt="image" src="https://github.com/user-attachments/assets/51fa89dd-ae3d-4c99-b132-facd85231f11" />
+
+<img width="975" height="517" alt="image" src="https://github.com/user-attachments/assets/29de703a-280b-4bfa-b475-63b7f0b54143" />
+
 **[fig 28]** — `prep` picking up `sky130_inv.lef` as an extra LEF, full synthesis completing at a new area figure.
-*→ place after `run_synthesis`*
+
 
 ### Area impact of the custom cell
 
@@ -411,9 +459,13 @@ init_floorplan
 place_io
 tap_decap_or
 ```
+<img width="975" height="450" alt="image" src="https://github.com/user-attachments/assets/41e6f5d1-65ef-45be-906f-8ba7de930abf" />
+
+<img width="975" height="277" alt="image" src="https://github.com/user-attachments/assets/4c1d77dc-6245-474e-b9cb-b6ed7b36b6cd" />
+
+<img width="975" height="548" alt="image" src="https://github.com/user-attachments/assets/cb8d8b22-b13f-4fd2-ba4e-2b2341f73e3f" />
 
 **[fig 29]** — `init_floorplan` (die/core area extracted, DEF written), `place_io` (I/O pins placed), `tap_decap_or` (endcaps + tapcells inserted — 528 endcaps, 7872 tapcells this run), and the Magic view of the resulting floorplan.
-*→ place after the floorplan commands — last figure for now*
 
 
 
