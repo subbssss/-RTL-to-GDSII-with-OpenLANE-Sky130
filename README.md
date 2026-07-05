@@ -2,7 +2,6 @@
 
 A record of me taking the `picorv32a` RISC-V core through the open-source RTL-to-GDSII flow — synthesis, floorplanning, placement, and building/dropping in a custom standard cell — as part of the VSD Digital VLSI SoC Design workshop. Everything past the theory section is my own run, on my own VM, with numbers pulled from my own reports.
 
-I'm through Day 4 (custom cell integrated and floorplanned, haven't hit CTS/routing with it yet), so this will keep growing.
 
 ---
 
