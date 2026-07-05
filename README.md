@@ -13,8 +13,9 @@ I'm through Day 4 (custom cell integrated and floorplanned, haven't hit CTS/rout
 3. [Day 1 — Setup and First Synthesis](#day-1--setup-and-first-synthesis)
 4. [Day 2 — Floorplan, PDN, Placement](#day-2--floorplan-pdn-placement)
 5. [Day 3 — Custom Standard Cell Design](#day-3--custom-standard-cell-design)
-6. [Day 4 (in progress) — Wiring the Custom Cell into the Flow](#day-4-in-progress--wiring-the-custom-cell-into-the-flow)
-7. [Acknowledgements](#acknowledgements)
+6. [Day 4 — Custom Cell Integration, STA, ECO Fixes, and CTS](#day-4--custom-cell-integration-sta-eco-fixes-and-cts)
+7. [Day 5 — PDN, Routing, and Post-Route Sign-off](#day-5--pdn-routing-and-post-route-sign-off)
+8. [Acknowledgements](#acknowledgements)
 
 ---
 
@@ -363,7 +364,7 @@ plot y vs time a
 
 ---
 
-## Day 4 — Wiring the Custom Cell into the Flow
+## Day 4 — Custom Cell Integration, STA, ECO Fixes, and CTS
 
 ### Checking track alignment
 
@@ -467,7 +468,325 @@ tap_decap_or
 
 **[fig 29]** — `init_floorplan` (die/core area extracted, DEF written), `place_io` (I/O pins placed), `tap_decap_or` (endcaps + tapcells inserted — 528 endcaps, 7872 tapcells this run), and the Magic view of the resulting floorplan.
 
+### Post-synthesis timing analysis with OpenSTA
 
+With the custom cell in the netlist, the real question was: what does it cost me in timing? Ran OpenSTA standalone against `pre_sta.conf` rather than trusting the flow's built-in check alone.
+
+```tcl
+set cmd_units -time ns -capacitance pF -current mA -voltage V -resistance kOhm -distance um
+read_liberty -max .../src/sky130_fd_sc_hd__slow.lib
+read_liberty -min .../src/sky130_fd_sc_hd__fast.lib
+read_verilog .../results/synthesis/picorv32a.synthesis.v
+link_design picorv32a
+read_sdc .../src/my_base.sdc
+report_checks -path_delay min_max -fields {slew trans net cap input_pin}
+report_tns
+report_wns
+```
+
+```bash
+sta pre_sta.conf
+```
+
+<img width="975" height="521" alt="image" src="https://github.com/user-attachments/assets/b8d380f8-0290-4f48-b5fc-ac57b099af68" />
+
+<img width="975" height="427" alt="image" src="https://github.com/user-attachments/assets/400d0579-5d8f-4f43-ba81-5cb56ff26287" />
+
+**[fig 30]** — `pre_sta.conf` commands in the editor, and the actual `sta pre_sta.conf` run alongside: a hold-path check (`Path Type: min`) between two flip-flops on the custom `sky130_vsdinv` cell, closing at `0.24 slack (MET)`.
+
+<img width="975" height="477" alt="image" src="https://github.com/user-attachments/assets/1a25b77e-3b14-4099-b35d-c72091fff886" />
+
+**[fig 31]** — the same run's `report_tns` / `report_wns` output, landing at `tns -711.59` / `wns -23.89` — this is the setup-side view, and it's clearly still in violation.
+
+### Reducing fanout and re-running synthesis
+
+The custom inverter's un-optimized drive strength was causing high-fanout nets to slow down. Constrained max fanout and let synthesis re-map.
+
+```tcl
+prep -design picorv32a -tag 04-07-06-23 -overwrite
+set lefs [glob $::env(DESIGN_DIR)/src/*.lef]
+add_lefs -src $lefs
+set ::env(SYNTH_SIZING) 4
+echo $::env(SYNTH_DRIVING_CELL)
+run_synthesis
+```
+
+<img width="975" height="533" alt="image" src="https://github.com/user-attachments/assets/5b2f588b-2b92-4564-82fb-6366bdb86813" />
+
+<img width="975" height="585" alt="image" src="https://github.com/user-attachments/assets/38325df3-7008-4839-aaee-94fbb0b1ada8" />
+
+**[fig 32]** — `prep` re-run merging the custom LEF again, `SYNTH_DRIVING_CELL` confirmed as `sky130_fd_sc_hd__inv_8`, and the completed synthesis: new chip area **152,738.99 µm²**, closing at `tns 0.00` / `wns 0.00`.
+
+
+| Run | Chip area | WNS |
+|---|---|---|
+| Day 4, first custom-cell synthesis | 181,729.29 µm² | (violating) |
+| Day 4, after fanout/sizing rework | 152,738.99 µm² | 0.00 |
+
+Interesting outcome — re-mapping with tighter sizing constraints actually brought the area *down* below the first custom-cell run, not just closed the timing. A different synthesis strategy chose noticeably different gate sizes for the same netlist.
+
+### Timing ECO fixes (manual cell swaps)
+
+Separately from the clean fanout-fixed run above, I went through the original (still-violating) netlist by hand to practice manual ECO — the kind of fix you'd do if re-synthesizing from scratch wasn't an option.
+
+```tcl
+report_net -connections _11643_
+help replace_cell
+replace_cell _14481_ sky130_fd_sc_hd__or4_4
+report_checks -fields {net cap slew input_pins} -digits 4
+```
+
+<img width="975" height="613" alt="image" src="https://github.com/user-attachments/assets/f5c26a22-5669-43a1-a591-513ffebbdbe1" />
+
+<img width="975" height="515" alt="image" src="https://github.com/user-attachments/assets/b587e414-5f81-4508-9edc-1a5aade8bb9c" />
+
+**[fig 33]** — `report_net -connections _11643_` showing the driver (`_14481_/Y`, an OR gate of drive strength 2) feeding three loads it wasn't sized for; `replace_cell` swapping it for the drive-strength-4 version; timing report starting to regenerate.
+
+<img width="975" height="596" alt="image" src="https://github.com/user-attachments/assets/7394bec0-b1ff-4cc2-8d42-5646907057ad" />
+
+<img width="975" height="640" alt="image" src="https://github.com/user-attachments/assets/d75cb888-ceec-420c-b030-85d0b8dcdaea" />
+
+**[fig 34]** — the regenerated timing report continuing through the same fanout chain, ultimately closing at `slack -23.8950 VIOLATED` for this particular path — better than before the swap, but this one path alone wasn't going to fix the whole design.
+
+
+```tcl
+report_checks -from _29052_ -to _30440_ -through _14506_
+```
+
+```bash
+cd .../results/synthesis/
+ls
+cp picorv32a.synthesis.v picorv32a.synthesis_old.v
+ls
+```
+
+<img width="975" height="783" alt="image" src="https://github.com/user-attachments/assets/7f8ea1d3-200f-4183-8508-e67b1d210cf8" />
+
+**[fig 35]** — `report_checks -from -to -through` confirming the swapped instance now sits correctly in the path, followed by backing up the original netlist (`picorv32a.synthesis_old.v`) before anything gets overwritten.
+
+
+I ended up carrying the **fanout-fixed 0/0 run** (fig 32) forward into floorplan/placement/CTS rather than the manually-patched netlist — the ECO swaps were a useful exercise in reading timing reports and using `replace_cell`, but re-synthesizing with the right constraints was the faster path to a clean design.
+
+### Floorplan and placement on the clean netlist
+
+```tcl
+init_floorplan
+tap_decap_or
+run_placement
+```
+
+<img width="975" height="485" alt="image" src="https://github.com/user-attachments/assets/d6298cf3-3169-474b-a2b0-76f2bc8fa323" />
+
+<img width="975" height="294" alt="image" src="https://github.com/user-attachments/assets/31e727d2-9484-4c15-8818-032f42ed8b29" />
+
+**[fig 36]** — `init_floorplan` and `tap_decap_or` logs on the fanout-fixed netlist — endcaps and tapcells inserted, floorplan DEF written.
+
+<img width="975" height="538" alt="image" src="https://github.com/user-attachments/assets/b01dfc3f-02da-4263-ba67-532edf40a932" />
+
+**[fig 37]** — `run_placement` stats block.
+
+
+| Metric | Value |
+|---|---|
+| Total instances | 10,915 |
+| Fixed instances | 6,130 |
+| Nets | 15,441 |
+| Design area | 485,298.6 µm² |
+| Fixed area | 8,041.0 µm² |
+| Movable area | 141,947.4 µm² |
+| Utilization | 36% |
+| Utilization, padded | 55% |
+| Rows | 234 |
+| Row height | 2.7 µm |
+| Original HPWL | 694,322.5 µm |
+| Legalized HPWL | 707,253.4 µm |
+| HPWL delta | +1.8% |
+
+Worth flagging: HPWL actually got *worse* through legalization this time (+1.8%, vs. the −1.7% improvement back on Day 2). With the custom cell now in the mix, the legalizer had a slightly different set of legal sites to work with — not a red flag on its own, just a different placement problem than the stock-library-only run.
+
+### Running CTS
+
+```tcl
+run_cts
+```
+
+<img width="975" height="406" alt="image" src="https://github.com/user-attachments/assets/8575d528-b9a3-481a-8ba1-0aacabc4b17f" />
+
+<img width="975" height="465" alt="image" src="https://github.com/user-attachments/assets/c2ac837e-433b-4fbb-ad56-d7ce8fd6a3e9" />
+
+**[fig 38]** — `run_cts` log: TritonCTS running, liberty trimmed, clock tree built, closing at `wns 0.00` / `tns 0.00`, with an initial (pre-buffer-list-change) clock skew report showing `Latency 4.44 ns`, `Skew 3.44 ns`.
+
+
+### Post-CTS timing analysis in OpenROAD
+
+```tcl
+openroad
+read_lef .../tmp/merged.lef
+read_liberty $::env(LIB_SYNTH_COMPLETE)
+read_verilog .../results/synthesis/picorv32a.synthesis_cts.v
+link_design picorv32a
+read_sdc .../src/my_base.sdc
+set_propagated_clock [all_clocks]
+report_checks -path_delay min_max -fields {slew trans net cap input_pins} -format full_clock_expanded -digits 4
+```
+
+<img width="975" height="367" alt="image" src="https://github.com/user-attachments/assets/4d66f349-3e30-4af3-8e1b-e2112af4448a" />
+
+**[fig 39]** — the first attempt into OpenROAD hit a couple of ordering issues — `ORD-1018: no technology has been read` from trying to link before reading the LEF, and a `read_sdc` typo that killed the session with a segmentation fault. Re-ran the commands in the right order (LEF → liberty → verilog → link → sdc) and it went through cleanly.
+
+
+<img width="975" height="488" alt="image" src="https://github.com/user-attachments/assets/4e7e34cf-a853-47fd-833c-e7a501938b37" />
+
+**[fig 40]** — clean post-CTS `report_checks` output for a hold path, closing at `0.3819 slack (MET)`.
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/77f53fee-ccba-4a88-90d6-7d7441700a6c" />
+
+**[fig 41]** — a second `report_checks` for a longer setup path through several `or2`/`o21a` cells, closing at `7.2027 slack (MET)`.
+
+### Exploring `CTS_CLK_BUFFER_LIST`
+
+Curious what removing the smallest clock buffer from the list would do to skew, so I pulled `sky130_fd_sc_hd__clkbuf_1` out and re-ran CTS.
+
+```tcl
+echo $::env(CTS_CLK_BUFFER_LIST)
+set ::env(CTS_CLK_BUFFER_LIST) [lreplace $::env(CTS_CLK_BUFFER_LIST) 0 0]
+set ::env(CURRENT_DEF) .../results/placement/picorv32a.placement.def
+run_cts
+```
+
+<img width="975" height="523" alt="image" src="https://github.com/user-attachments/assets/50baec77-faf0-42b0-accc-df0ff399c677" />
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/b208a32a-8235-435b-8b87-563701146905" />
+
+**[fig 42]** — a couple of `lreplace` syntax attempts that failed (`wrong # args`) before getting the bracket/quoting right, then the list confirmed without `clkbuf_1` (`clkbuf_2 clkbuf_4 clkbuf_8`), followed by CTS re-running successfully on the placement DEF.
+
+
+```tcl
+report_clock_skew -hold
+report_clock_skew -setup
+```
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/0a0746ee-89a2-4427-9f38-3213b1e919c8" />
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/80b54161-766b-46ba-a8ff-6dec87ad8fea" />
+
+<img width="975" height="471" alt="image" src="https://github.com/user-attachments/assets/6c244454-31e0-4c89-beed-1708efa81604" />
+
+**[fig 43]** — clock skew report with `clkbuf_1` removed: latency 1.67 ns / 0.91 ns on the two flops checked, CRPR 0.00, **skew down to 0.76 ns** for both hold and setup — a real improvement over the 3.44 ns skew from the original buffer list.
+
+
+| Clock buffer list | Skew (hold) | Skew (setup) |
+|---|---|---|
+| Default (`clkbuf_1, 2, 4, 8`) | 3.44 ns | — |
+| Without `clkbuf_1` | 0.76 ns | 0.76 ns |
+
+Removing the smallest buffer forced CTS to build the tree out of larger, more consistent drive strengths — fewer stage-to-stage variations meant less accumulated skew. Small buffers are cheap on area but clearly not free on skew.
+
+```tcl
+set ::env(CTS_CLK_BUFFER_LIST) [linsert $::env(CTS_CLK_BUFFER_LIST) 0 sky130_fd_sc_hd__clkbuf_1]
+echo $::env(CTS_CLK_BUFFER_LIST)
+```
+
+<img width="975" height="115" alt="image" src="https://github.com/user-attachments/assets/2594d62d-106a-4e36-a22e-a01f820dfe93" />
+
+**[fig 44]** — putting `clkbuf_1` back at the front of the list and confirming it's restored, before moving on to Day 5.
+
+---
+
+## Day 5 — PDN, Routing, and Post-Route Sign-off
+
+### Generating the Power Distribution Network
+
+```tcl
+prep -design picorv32a -tag 04-07-08-05 -overwrite
+set lefs [glob $::env(DESIGN_DIR)/src/*.lef]
+add_lefs -src $lefs
+set ::env(SYNTH_STRATEGY) "DELAY 3"
+set ::env(SYNTH_SIZING) 1
+run_synthesis
+init_floorplan
+tap_decap_or
+run_placement
+run_cts
+gen_pdn
+```
+
+<img width="975" height="510" alt="image" src="https://github.com/user-attachments/assets/8ba5e480-8fe2-4120-a933-4e7ab9b9b189" />
+
+<img width="975" height="521" alt="image" src="https://github.com/user-attachments/assets/33d71daa-0275-448b-b31d-890625a81108" />
+
+**[fig 45]** — `gen_pdn` running: the same familiar vsrc-not-on-a-power-stripe warnings (still just the PDN step nudging via placements onto the nearest stripe, not an error), ending with `PDN generation was successful`.
+
+
+### Viewing the PDN in Magic
+
+```tcl
+magic -T .../sky130A.tech lef read ../../tmp/merged.lef def read 14-pdn.def &
+```
+
+<img width="975" height="523" alt="image" src="https://github.com/user-attachments/assets/98d9bd78-363d-43c0-a328-6eaa2eb3e9a6" />
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/881cbc08-3138-4739-9cbe-50d2f1717814" />
+
+**[fig 46]** — Magic loading the PDN DEF — a dense power mesh across the whole core — with tkcon printing a string of `Unknown keyword ... in LEF file, ignoring` messages (`PERIMETERSIDEAREA`, `ANTENNAMODEL`, `MAXIMUMDENSITY`, etc.). These are all just LEF fields Magic doesn't parse but doesn't need — harmless.
+
+
+### Detailed routing with TritonRoute
+
+```tcl
+run_routing
+```
+
+<img width="975" height="325" alt="image" src="https://github.com/user-attachments/assets/cc84c425-b1c6-491b-84d0-52461915a74e" />
+
+**[fig 47]** — routing kicking off: Global Routing stage, min routing layer 2 / max routing layer 6, unidirectional routing enabled, obstruction counts being processed layer by layer.
+
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/53f84d3f-d03e-48ea-8a25-6c971a3a8018" />
+
+**[fig 48]** — routing finishing up: parasitic extraction parameters (edge capacitance factor 1.0, wire model L), SPEF file written, and Static Timing Analysis kicked off automatically right after — closing with `Routing completed for picorv32a/04-07-09-35 in 15m36s`.
+
+
+Worth calling out: the original workshop material treats parasitic extraction and post-route STA as two separate manual steps (an external Python SPEF extractor, then a standalone OpenROAD/OpenSTA session). On this run, `run_routing` chained RC extraction, SPEF writing, and STA automatically as part of the same step — so what was three tasks in the walkthrough became one continuous log for me. Also, 15 minutes for routing on this VM is a good reminder that detailed routing is genuinely the heaviest stage in the whole flow.
+
+### Viewing the routed layout in Magic
+
+```tcl
+cd .../results/routing/
+magic -T .../sky130A.tech lef read ../../tmp/merged_unpadded.lef def read picorv32a.def &
+```
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/14527574-f34a-4d0e-a77e-98a36f78576d" />
+
+**[fig 49]** — tkcon confirming the load: `Processed 52921 subcell instances total`, `427 pins total`, `15441 nets total`, `DEF read: Processed 356819 lines`.
+
+<img width="975" height="521" alt="image" src="https://github.com/user-attachments/assets/c49c7ea2-09a8-4bb3-a6d3-6a18421ae76b" />
+
+<img width="975" height="519" alt="image" src="https://github.com/user-attachments/assets/f499ee47-ccd0-4a9b-85ae-494a32763e68" />
+
+**[fig 50]** — zoomed-in view of the fully routed layout — standard cells, filler cells, and decap cells packed into rows, with the actual metal routing tracks visible threading between them.
+
+
+### Routing summary
+
+| Metric | Value |
+|---|---|
+| Nets routed | 15,441 |
+| Pins | 427 |
+| Subcell instances | 52,921 |
+| Min routing layer | 2 |
+| Max routing layer | 6 |
+| Wire model | L |
+| Edge capacitance factor | 1.0 |
+| Total routing runtime | 15m 36s |
+
+That's the flow closed end-to-end — `picorv32a`, with a hand-built inverter cell wired into the standard cell library, taken from RTL through a fully routed, timing-clean layout.
+
+---
+
+## Acknowledgements
+
+This log follows the VSD "Digital VLSI SoC Design and Planning" workshop by Kunal Ghosh (VSD Corp.), with the Day 3–5 custom standard cell lab built around Nickson P. Jose's `vsdstdcelldesign` reference design. All commands, screenshots, and numbers above are from my own runs on the workshop VM.
 
 ---
 
