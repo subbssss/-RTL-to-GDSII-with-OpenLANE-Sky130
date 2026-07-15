@@ -788,7 +788,3 @@ That's the flow closed end-to-end — `picorv32a`, with a hand-built inverter ce
 This log follows the VSD "Digital VLSI SoC Design and Planning" workshop by Kunal Ghosh (VSD Corp.), with the Day 3–5 custom standard cell lab built around Nickson P. Jose's `vsdstdcelldesign` reference design. All commands, screenshots, and numbers above are from my own runs on the workshop VM.
 
 ---
-
-## Acknowledgements
-
-This log follows the VSD "Digital VLSI SoC Design and Planning" workshop by Kunal Ghosh (VSD Corp.), with the Day 3–4 custom standard cell lab built around Nickson P. Jose's `vsdstdcelldesign` reference design.
